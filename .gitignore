@@ -1,0 +1,14 @@
+# Ignore Python's virtual environment, cache, and logs
+/venv
+__pycache__/
+*.log
+
+# Ignore sensitive environment variables
+.env
+
+# Ignore local vector databases (not used, but good practice)
+/chroma_db
+/faiss_index
+
+# Ignore system-specific files
+.DS_Store
