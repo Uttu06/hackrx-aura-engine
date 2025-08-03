@@ -1,24 +1,16 @@
+# Definitive cloudbuild.yaml - Version 3.0 (Corrected)
 steps:
-# Step 1: Build the Docker container image
-- name: 'gcr.io/cloud-builders/docker'
-  args:
-    - 'build'
-    - '-t'
-    - 'asia-south1-docker.pkg.dev/$PROJECT_ID/aura-engine-repo/aura-service:v1'
-    - '.'
-  # Increase the timeout to 3600 seconds (1 hour) for this complex build
-  timeout: 3600s
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'asia-south1-docker.pkg.dev/$PROJECT_ID/aura-engine-repo/aura-service:final'
+      - '.'
 
-# Step 2: Push the container image to Artifact Registry
-- name: 'gcr.io/cloud-builders/docker'
-  args:
-    - 'push'
-    - 'asia-south1-docker.pkg.dev/$PROJECT_ID/aura-engine-repo/aura-service:v1'
-
-# Define the image we just built so it can be used by other parts of GCP
 images:
-  - 'asia-south1-docker.pkg.dev/$PROJECT_ID/aura-engine-repo/aura-service:v1'
+  - 'asia-south1-docker.pkg.dev/$PROJECT_ID/aura-engine-repo/aura-service:final'
 
 options:
-  # Use a more powerful machine type for this AI build
   machineType: 'E2_HIGHCPU_8'
+
+timeout: 3600s

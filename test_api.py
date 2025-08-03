@@ -1,44 +1,61 @@
 """
 Rigorous latency testing script for FastAPI RAG endpoint.
 Tests both cache miss and cache hit scenarios with detailed timing analysis.
+Upgraded with Bearer token authentication and official test payload.
 """
+import os
 import requests
 import time
 import json
 from typing import Dict, Any
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # API configuration
 API_URL = "http://127.0.0.1:8000/hackrx/run"
 
-# Test payload with hackathon sample data
+# Official test payload with new document and questions
 payload = {
-    "documents": "https://www.hackrx.in/policies/CHOTGDP23004V012223.pdf",
+    "documents": "https://hackrx.blob.core.windows.net/assets/policy.pdf?sv=2023-01-03&st=2025-07-04T09%3A11%3A24Z&se=2027-07-05T09%3A11%3A00Z&sr=b&sp=r&sig=N4a9OU0w0QXO6AOIBiu4bpl7AXvEZogeT%2FjUHNO7HzQ%3D",
     "questions": [
-        "How does the policy define the term 'Hospital'?",
-        "What is the time frame used to define a 'Pre-existing Disease'?",
-        "According to the Table of Benefits for Personal Accident Covers, what percentage of the Sum Insured is payable for the permanent and total loss of sight in one eye?",
-        "Does the policy cover 'Maternity Expenses' and what are the specific events it includes?",
-        "List at least five activities that are specifically defined as 'Adventure Sports' in the policy.",
-        "Under the 'Emergency Accidental Hospitalisation' cover, is the cost related to pregnancy or childbirth covered?",
-        "Is any claim covered if it is a result of the insured person participating in a war or civil war?",
-        "What is the very first step an insured person must take if an accident occurs that is likely to lead to a claim?",
-        "What coverage is provided under Endorsement no. 10 - CHILD ESCORT?",
-        "What is a 'Deductible' and is it applied to claims for 'Emergency Medical Expenses - Illness/Diseases'?"
+        "What is the grace period for premium payment under the National Parivar Mediclaim Plus Policy?",
+        "What is the waiting period for pre-existing diseases (PED) to be covered?",
+        "Does this policy cover maternity expenses, and what are the conditions?",
+        "What is the waiting period for cataract surgery?",
+        "Are the medical expenses for an organ donor covered under this policy?",
+        "What is the No Claim Discount (NCD) offered in this policy?",
+        "Is there a benefit for preventive health check-ups?",
+        "How does the policy define a 'Hospital'?",
+        "What is the extent of coverage for AYUSH treatments?",
+        "Are there any sub-limits on room rent and ICU charges for Plan A?"
     ]
 }
 
 
-def make_api_request(payload: Dict[str, Any], timeout: int = 60) -> tuple[requests.Response, float]:
+def make_api_request(payload: Dict[str, Any], timeout: int = 180) -> tuple[requests.Response, float]:
     """
-    Make API request and measure response time.
+    Make API request with Bearer token authentication and measure response time.
     
     Args:
         payload: JSON payload to send
-        timeout: Request timeout in seconds
+        timeout: Request timeout in seconds (increased for re-ranking pipeline)
         
     Returns:
         Tuple of (response object, elapsed time in seconds)
     """
+    # Load Bearer token from environment
+    API_TOKEN = os.getenv("HACKRX_BEARER_TOKEN")
+    if not API_TOKEN:
+        raise ValueError("HACKRX_BEARER_TOKEN environment variable is required")
+    
+    # Prepare headers with authentication
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {API_TOKEN}"
+    }
+    
     start_time = time.perf_counter()
     
     try:
@@ -46,7 +63,7 @@ def make_api_request(payload: Dict[str, Any], timeout: int = 60) -> tuple[reques
             API_URL,
             json=payload,
             timeout=timeout,
-            headers={"Content-Type": "application/json"}
+            headers=headers
         )
         end_time = time.perf_counter()
         elapsed_time = end_time - start_time
@@ -118,7 +135,7 @@ def test_api_latency():
     print("⏳ Sending request... (this may take a while for document processing)")
     
     try:
-        response_1, elapsed_1 = make_api_request(payload, timeout=60)
+        response_1, elapsed_1 = make_api_request(payload, timeout=180)
         print_response_details(response_1, elapsed_1, "Cache Miss")
         
     except Exception as e:
@@ -134,7 +151,7 @@ def test_api_latency():
     print("⏳ Sending identical request... (should be much faster with caching)")
     
     try:
-        response_2, elapsed_2 = make_api_request(payload, timeout=60)
+        response_2, elapsed_2 = make_api_request(payload, timeout=180)
         print_response_details(response_2, elapsed_2, "Cache Hit")
         
     except Exception as e:

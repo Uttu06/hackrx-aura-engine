@@ -1,48 +1,52 @@
 # ==============================================================================
-# Definitive Multi-stage Dockerfile for FastAPI RAG application
-# Version: 4.0 (Lean Build, Late Model Initialization)
+# Definitive Dockerfile - Version 5.0 (CPU Build, GPU Runtime)
 # ==============================================================================
 
-# Stage 1: Build Environment - Just to compile wheels efficiently
-FROM python:3.11-slim AS builder
+# Use a standard base image
+FROM python:3.11-slim
 
-RUN apt-get update && apt-get install -y build-essential && rm -rf /var/lib/apt/lists/*
+# Set environment variables for best practices
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    DEBIAN_FRONTEND=noninteractive
 
-WORKDIR /wheelhouse
+# Install required system dependencies.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    git \
+    poppler-utils \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
 
 COPY requirements.txt .
 
-# Pre-compile PyTorch and Torchvision for a specific CUDA version first
-RUN pip wheel --no-cache-dir . --wheel-dir=/wheelhouse \
-    torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
-    
-# Then compile the rest of the dependencies
-RUN pip wheel --no-cache-dir . --wheel-dir=/wheelhouse -r requirements.txt
+# CRITICAL: Install the standard CPU version of torch first.
+RUN pip install --no-cache-dir torch torchvision torchaudio
 
-# Stage 2: Final Production Image
-FROM python:3.11-slim AS production
+# Now install the rest of the application dependencies.
+RUN pip install --no-cache-dir -r requirements.txt
 
-RUN apt-get update && apt-get install -y git poppler-utils && rm -rf /var/lib/apt/lists/*
+# Download NLTK data required by 'unstructured'
+RUN python3 -c "import nltk; nltk.download('punkt', quiet=True); nltk.download('averaged_perceptron_tagger', quiet=True);"
 
-# Copy the pre-compiled wheels from our builder stage
-COPY --from=builder /wheelhouse /wheelhouse
+# Copy our application source code
+COPY ./backend /app/backend
 
-# Install everything from the fast, local wheelhouse. This is much faster.
-RUN pip install --no-cache-dir --no-index --find-links=/wheelhouse /wheelhouse/*.whl
+# Create a non-root user and switch to it for security
+RUN useradd --create-home appuser
+USER appuser
+WORKDIR /home/appuser
 
-# We still install NLTK data during the build
-RUN python3 -c "import nltk; nltk.download('punkt'); nltk.download('averaged_perceptron_tagger')"
+# The models will be downloaded here when the container starts for the first time.
+ENV HUGGING_FACE_HUB_CACHE=/home/appuser/.cache/huggingface
 
-RUN useradd --create-home --shell /bin/bash app
-WORKDIR /home/app
-USER app
-
+# Set the production environment variable
 ENV APP_ENV=production
-ENV HUGGING_FACE_HUB_CACHE=/home/app/.cache/huggingface
 
-# Copy our application code last
-COPY --chown=app:app ./backend /home/app/backend
-
+# Expose the port the application will run on
 EXPOSE 8080
 
-CMD ["gunicorn", "-w", "1", "-k", "uvicorn.workers.UvicornWorker", "--timeout", "300", "-b", "0.0.0.0:8080", "backend.main:app"]
+# The final command to start the application server
+CMD ["gunicorn", "-w", "1", "-k", "uvicorn.workers.UvicornWorker", "--timeout", "900", "-b", "0.0.0.0:8080", "backend.main:app"]
